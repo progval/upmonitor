@@ -1,0 +1,8 @@
+*.swp
+*.swo
+*~
+build/
+*.pyc
+*.pyo
+settings.json
+generate_example.py
