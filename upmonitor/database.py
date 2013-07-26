@@ -55,6 +55,10 @@ class Database:
                 obj = obj[slave_hostname]
         return obj
 
+    def __iter__(self):
+        return self._hosts.__iter__(self)
+    def items(self):
+        return self.__iter__(self)
 
     def to_dict(self):
         """Returns a dictionnary to be sent over network and loaded with

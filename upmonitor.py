@@ -31,7 +31,8 @@ if __name__ == '__main__':
     # iteration to matter.
     plugins = []
     for (module, plugin_conf) in conf['plugins'].items():
-        plugin = Plugin.load_plugin(module, plugin_conf, database)
+        plugin = Plugin.load_plugin(module,
+                my_hostname, plugin_conf, conf, database)
         if plugin:
             plugins.append(plugin)
 

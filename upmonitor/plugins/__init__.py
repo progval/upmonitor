@@ -7,17 +7,20 @@ from upmonitor.database import get_absolute_dict as absdict
 
 class Plugin:
     _instances = []
-    def __init__(self, database):
+    def __init__(self, my_hostname, plugin_conf, conf, database):
         self._instances.append(self)
         self.log = logging.getLogger(self.__class__.__name__)
+        self.my_hostname = my_hostname
+        self.plugin_conf = plugin_conf
+        self.conf = conf
         self.database = database
 
     @staticmethod
-    def load_plugin(path, plugin_conf, database):
+    def load_plugin(path, my_hostname, plugin_conf, conf, database):
         try:
             name = os.path.splitext(os.path.split(path)[1])[0]
             module = imp.load_source(name, path)
-            plugin = module.Plugin(database)
+            plugin = module.Plugin(my_hostname, plugin_conf, conf, database)
         except Exception:
             logging.error('Cannot import plugin %s:\n%s' % 
                     (name, traceback.format_exc()))
