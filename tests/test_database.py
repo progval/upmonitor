@@ -43,13 +43,15 @@ class TestDatabase(unittest.TestCase):
 
         self.assertEqual(
             database.update_from_dict({'Two': {'One': {'baz': (5, 'qux')}}}),
-            {'Two': {'One': {'baz': (5, 'qux')}}}
+            ({'Two': {'One': {'baz': None}}},
+             {'Two': {'One': {'baz': (5, 'qux')}}})
             )
         self.assertEqual(
             database.update_from_dict({'Two': {'One': {'baz': (6, 'quux')}}}),
-            {'Two': {'One': {'baz': (6, 'quux')}}}
+            ({'Two': {'One': {'baz': (5, 'qux')}}},
+             {'Two': {'One': {'baz': (6, 'quux')}}})
             )
         self.assertEqual(
             database.update_from_dict({'Two': {'One': {'baz': (4, 'corge')}}}),
-            {}
+            ({}, {})
             )

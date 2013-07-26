@@ -2,8 +2,16 @@
     "contact": [
         "bofh@example.org"
     ],
+    "log": {
+        "level": "DEBUG",
+        "format": "%(asctime)s %(levelname)s: %(message)s"
+    },
     "interval": 10,
     "secret": "random passphrase",
+    "plugins": {
+        "upmonitor/plugins/debug.py": {
+        }
+    },
     "hosts": {
         "Desktop_One": {
             "daemon": {

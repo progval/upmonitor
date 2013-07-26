@@ -23,8 +23,11 @@ class _MethodCaller:
 
 class Handler(asyncore.dispatcher_with_send):
     """Abstract class for managing a connection an events."""
-    def __init__(self, sock=None, ui=None):
+    def __init__(self, sock=None, plugins=None):
         super(Handler, self).__init__(sock)
+        if plugins is None:
+            plugins = []
+        self._plugins = plugins
         self._unpacker = msgpack.Unpacker(use_list=True, encoding='utf8')
         self.call = _MethodCaller(self)
 
@@ -51,13 +54,23 @@ class Handler(asyncore.dispatcher_with_send):
         assert isinstance(obj, dict), obj
         assert 'command' in obj, obj
         assert isinstance(obj['command'], str), obj['command']
-        method_name = 'on_' + obj.pop('command')
-        if hasattr(self, method_name):
-            method = getattr(self, method_name)
-            parsed = method(**obj)
+        command = obj.pop('command')
+        self.call_plugins_pre_callback(command, obj)
+        if hasattr(self, 'on_' + command):
+            method = getattr(self, 'on_' + command)
+            method(**obj)
         else:
             logging.info('Unknown command received: %s' % obj['command'])
         return True
+
+    def call_plugins_pre_callback(self, command, kwargs):
+        for plugin in self._plugins:
+            if hasattr(plugin, 'pre_' + command):
+                getattr(plugin, 'pre_' + command)(**kwargs)
+    def call_plugins_post_callback(self, command, kwargs):
+        for plugin in self._plugins:
+            if hasattr(plugin, 'post_' + command):
+                getattr(plugin, 'post_' + command)(**kwargs)
 
     def on_ping(self, token):
         assert isinstance(token, str)

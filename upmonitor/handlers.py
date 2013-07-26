@@ -35,9 +35,9 @@ class Handler(networking.Handler):
     """Dictionnary of client handler which successfully authenticated the
     client."""
 
-    def __init__(self, conf, database, my_hostname, other_hostname=None,
-            sock=None):
-        super(Handler, self).__init__(sock)
+    def __init__(self, conf, database, plugins,
+            my_hostname, other_hostname=None, sock=None):
+        super(Handler, self).__init__(sock, plugins)
         self._my_hostname = my_hostname
         self._other_hostname = other_hostname
         self._conf = conf
@@ -48,7 +48,8 @@ class Handler(networking.Handler):
         """Random token used as salt for this session."""
 
     @classmethod
-    def propagate_local_database_update(cls, updated, slave_hostname=None):
+    def propagate_local_database_update(cls, old_state, updated,
+            my_hostname, slave_hostname=None):
         """Sends an 'update_state' to all connected hosts about a database
         update made locally (ie. not from network).
 
@@ -60,7 +61,7 @@ class Handler(networking.Handler):
         for handler in cls._instances.values():
             if handler._authenticated:
                 handler.call.update_state(new_state=updated,
-                        monitor_hostname=handler._my_hostname,
+                        monitor_hostname=my_hostname,
                         slave_hostname=slave_hostname)
 
     def handle_connect(self):
@@ -152,14 +153,25 @@ class Handler(networking.Handler):
         state = self._database.get_from_hostnames(
                 monitor_hostname=monitor_hostname,
                 slave_hostname=slave_hostname)
-        updated = state.update_from_dict(new_state)
-        if updated:
+        (old_state, new_state) = state.update_from_dict(new_state)
+        kwargs = {'monitor_hostname': monitor_hostname,
+                'slave_hostname': slave_hostname,
+                'new_state': new_state,
+                }
+        if new_state:
             for instance in self._instances.values():
                 if instance is not self:
                     instance.call.update_state(
                         monitor_hostname=monitor_hostname,
                         slave_hostname=slave_hostname,
-                        new_state=updated)
+                        new_state=new_state)
+        self.call_plugins_post_callback('update_state', {
+            'monitor_hostname': monitor_hostname,
+            'slave_hostname': slave_hostname,
+            'new_state': new_state,
+            'old_state': old_state
+            })
+
 
     def handle_close(self):
         super(Handler, self).handle_close()
