@@ -102,7 +102,7 @@ class Handler(networking.Handler):
         if m.hexdigest() == signed_token:
             self.call.validate_handshake_reply(ok=True)
         else:
-            self.call.validate_handshake_reply(ok=True)
+            self.call.validate_handshake_reply(ok=False)
             return
         self._authenticated = True
         self._instances[self._other_hostname] = self
@@ -160,6 +160,13 @@ class Handler(networking.Handler):
                         monitor_hostname=monitor_hostname,
                         slave_hostname=slave_hostname,
                         new_state=updated)
+
+    def handle_close(self):
+        super(Handler, self).handle_close()
+        if hasattr(self, '_db_connection') and \
+                self._db_connection['connected']:
+            self._db_connection.update_one(time.time(), 'connected', False)
+
 
 class Server(Handler):
     """Handles connection with a client."""

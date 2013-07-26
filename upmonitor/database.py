@@ -107,7 +107,7 @@ class Connection:
         self._state = state.copy()
 
     def __getitem__(self, name):
-        return self._state[name][0]
+        return self._state[name][1]
 
     def update(self, timestamp, **kwargs):
         """Update multiple items from a given timestamp. Supposed to be used
