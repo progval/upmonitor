@@ -5,6 +5,8 @@ import traceback
 
 from upmonitor.database import get_absolute_dict as absdict
 
+__all__ = ['Plugin']
+
 class Plugin:
     _instances = []
     def __init__(self, my_hostname, plugin_conf, conf, database):

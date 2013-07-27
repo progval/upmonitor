@@ -8,19 +8,23 @@ An Host is immutable.
 Connection is a wrapper around a dictionnary used as state of a
 connection.
 A Connection can be updated in two ways:
-    * from the network, with the update_from_dict method. Only
-      keys with a last-update-timestamp greater than the one
-      recorded are updated.
-    * from the host monitoring this connection. The host gives
-      a timestamp at which this change has been made, that should
-      (obviously) be greater than the timestamp of the latest
-      recorded change.
+
+* from the network, with the update_from_dict method. Only
+  keys with a last-update-timestamp greater than the one
+  recorded are updated.
+* from the host monitoring this connection. The host gives
+  a timestamp at which this change has been made, that should
+  (obviously) be greater than the timestamp of the latest
+  recorded change.
+
 Time does not have to be synced between hosts since a timestamp may
 only be compared with another timestamp from the same host.
 """
 
 import bisect
 import operator
+
+__all__ = ['get_absolute_dict', 'Database', 'Host', 'Connection']
 
 def get_absolute_dict(state, monitor_hostname=None, slave_hostname=None):
     """Returns a dictionnary with the nesting level of a Database from a
@@ -56,9 +60,16 @@ class Database:
         return obj
 
     def __iter__(self):
-        return self._hosts.__iter__(self)
+        return self._hosts.__iter__()
+
     def items(self):
-        return self.__iter__(self)
+        return self._hosts.items()
+
+    def keys(self):
+        return self._hosts.keys()
+
+    def values(self):
+        return self._hosts.values()
 
     def to_dict(self):
         """Returns a dictionnary to be sent over network and loaded with
@@ -67,7 +78,7 @@ class Database:
 
     def update_from_dict(self, dict_):
         """Update state from network from a dictionnary created with to_dict.
-        Returns a dict of dict of dict of updated values."""
+        Returns a 2-tuple of dicts of dict of dict of updated values."""
         old_states = {}
         new_states = {}
         for (key, value) in dict_.items():
@@ -107,7 +118,7 @@ class Host:
 
     def update_from_dict(self, dict_):
         """Update state from network from a dictionnary created with to_dict.
-        Returns a dict of dict of updated values."""
+        Returns a 2-tuple of dict of dict of updated values."""
         old_states = {}
         new_states = {}
         for (key, value) in dict_.items():
@@ -161,7 +172,9 @@ class Connection:
 
     def update_from_dict(self, dict_):
         """Update state from network from a dictionnary created with to_dict.
-        Returns a dict of updated values."""
+        Returns a 2-tuple containing two `{key: value}` dictionnaries, where
+        all keys are keys that have *actually* been updated, and values are
+        either old values (first dict) or new ones (second dict)."""
         old_state = {}
         new_state = {}
         for (key, value) in dict_.items():

@@ -4,5 +4,6 @@
 build/
 *.pyc
 *.pyo
+docs/_build/
 settings.json
 generate_example.py

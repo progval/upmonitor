@@ -4,6 +4,8 @@ import msgpack
 import asyncore
 import traceback
 
+__all__ = ['Handler', 'run']
+
 class CannotConnect(Exception):
     pass
 class ConnectionRefused(Exception):
