@@ -140,7 +140,6 @@ class Handler(networking.Handler):
         m.update(token.encode())
         m.update(self._my_hostname.encode())
         self.call.validate_handshake(signed_token=m.hexdigest())
-        self._db_connection.update_one(time.time(), 'connected', True)
 
     def on_validate_handshake(self, signed_token):
         """Reply to a 'handshake' command.
@@ -158,6 +157,7 @@ class Handler(networking.Handler):
             return
         self._authenticated = True
         self._instances[self._other_hostname] = self
+        self._db_connection.update_one(time.time(), 'connected', True)
         logging.info('%s authenticated.' % self._other_hostname)
 
     def on_validate_handshake_reply(self, ok):
@@ -166,6 +166,7 @@ class Handler(networking.Handler):
         :param ok: Whether or not the validation succeeded."""
         assert ok
         self.call.request_state()
+        self.call.request_intents()
 
     @check_auth
     def on_request_state(self, monitor_hostname=None, slave_hostname=None):
@@ -216,14 +217,38 @@ class Handler(networking.Handler):
                         monitor_hostname=monitor_hostname,
                         slave_hostname=slave_hostname,
                         new_state=new_state)
-        # TODO: If the 'connected' value of a state has been set to False,
-        # check if we should not perform an intent.
         self.call_plugins_post_callback('update_state', {
             'monitor_hostname': monitor_hostname,
             'slave_hostname': slave_hostname,
             'new_state': new_state,
             'old_state': old_state
             })
+        self.perform_approved_intents()
+
+    def perform_approved_intents(self):
+        graph = utils.NetworkGraph(self._database)
+        for (plugin, intents) in self._intents.items():
+            for intent in intents:
+                (id, creator, approvals, performed, extra) = intent
+                if creator == self._my_hostname and \
+                        approvals >= graph.get_reachable(self._my_hostname):
+                    if performed:
+                        continue
+                    self.perform_intent(plugin, intent)
+
+    @check_auth
+    def on_request_intents(self):
+        self.call.new_intents(intents={plugin:
+            [(id, creator, list(approvals))
+             for (id, creator, approvals, performed, extra) in intents
+             if not performed]
+            for (plugin, intents) in self._intents.items()})
+
+    @check_auth
+    def on_new_intents(self, intents):
+        for (plugin, plugin_intents) in intents.items():
+            for (id, creator, approvals) in plugin_intents:
+                self.on_new_intent(plugin, id, creator, approvals)
 
     @check_auth
     def on_new_intent(self, plugin, id, creator, approvals):
@@ -239,10 +264,10 @@ class Handler(networking.Handler):
         if plugin not in self._intents:
             self._intents[plugin] = []
         approvals = set(approvals)
-        graph = utils.NetworkGraph(self._database)
         for intent in self._intents[plugin]:
             (id2, creator2, approvals2, performed2, extra2) = intent
             if id2 == id:
+                graph = utils.NetworkGraph(self._database)
                 if creator == self._my_hostname and \
                         approvals >= graph.get_reachable(self._my_hostname):
                     if performed2:
@@ -357,6 +382,7 @@ class Handler(networking.Handler):
         if hasattr(self, '_db_connection') and \
                 self._db_connection['connected']:
             self._db_connection.update_one(time.time(), 'connected', False)
+            self.perform_approved_intents()
 
 
 class Server(Handler):
