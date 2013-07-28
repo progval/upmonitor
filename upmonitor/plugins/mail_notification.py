@@ -45,7 +45,9 @@ class MailNotification(Plugin):
             msg['From'] = 'upmonitor'
             msg['To'] = recipient
 
-            #smtp.send_message(msg)
+            if 'dry_run' not in self.plugin_conf or \
+                    not self.plugin_conf['dry_run']:
+                smtp.send_message(msg)
         smtp.close()
 
 
