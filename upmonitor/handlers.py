@@ -390,6 +390,7 @@ class Handler(networking.Handler):
 
     def handle_close(self):
         super(Handler, self).handle_close()
+        logging.error('Connection closed by %s' % self._other_hostname)
         if hasattr(self, '_db_connection') and \
                 self._db_connection['connected']:
             self._db_connection.update_one(time.time(), 'connected', False)
@@ -402,18 +403,31 @@ class Server(Handler):
         super(Server, self).__init__(*args, sock=sock, **kwargs)
         self.handle_connect()
 
+    def handle_close(self):
+        super(Server, self).handle_close()
+        if self._other_hostname in Client._clients:
+            utils.scheduler.enter(self._conf['hosts'][self._my_hostname]\
+                        ['monitor'][self._other_hostname]['reconnect_delay'],
+                    1,
+                    Client._clients[self._other_hostname].initialize_connection,
+                    argument=[])
+
 
 class Client(Handler):
     """Handles connection to a server."""
+
+    _clients = {}
     def __init__(self, host, port, *args, **kwargs):
         self.__host = host
         self.__port = port
         super(Client, self).__init__(*args, **kwargs)
+        self._clients[self._my_hostname] = self
         self.initialize_connection()
 
     def initialize_connection(self):
         self._next_initialization_scheduled = False
-        if not self.connected and not self.connecting:
+        if not self.connected and not self.connecting and \
+                self._other_hostname not in self._instances:
             logging.info('Connecting to %s' % self._other_hostname)
             self.connecting = True
             self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
