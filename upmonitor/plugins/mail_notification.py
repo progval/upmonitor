@@ -33,7 +33,9 @@ class MailNotification(Plugin):
         # TODO: This should be configurable on a per-host basis.
         smtp = smtplib.SMTP('localhost')
         for recipient in self.conf['contact']:
-            self.log.info('Sending mail to %s.' % recipient)
+            self.log.info('Sending mail to %s for %s -> %s going %s' %
+                    (recipient, monitor_hostname, slave_hostname,
+                        'up' if new_status else 'down'))
             msg = MIMEText(_("Mail notification from %(my_hostname)s's "
                     "upmonitor:\n\n"
                     "connection from %(monitor_hostname)s to %(slave_hostname)s "
