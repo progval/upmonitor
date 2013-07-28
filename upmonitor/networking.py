@@ -19,6 +19,8 @@ class _MethodCaller:
     def __getattr__(self, name):
         def method(**kwargs):
             kwargs['command'] = name
+            kwargs = {key: (list(value) if isinstance(value, set) else value)
+                      for (key, value) in kwargs.items()}
             self._handler.send(msgpack.packb(kwargs))
         return method
 

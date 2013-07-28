@@ -103,6 +103,18 @@ class Host:
     def __getitem__(self, hostname):
         return self._connections[hostname]
 
+    def __iter__(self):
+        return self._connections.__iter__()
+
+    def items(self):
+        return self._connections.items()
+
+    def keys(self):
+        return self._connections.keys()
+
+    def values(self):
+        return self._connections.values()
+
     def add_callback(self, cb):
         """Register a function to be called every time a connection of this
         host has one (or more) of its keys updated."""
@@ -143,6 +155,21 @@ class Connection:
 
     def __getitem__(self, name):
         return self._state[name][1]
+
+    def __iter__(self):
+        return self._connections.__iter__()
+
+    def __contains__(self, key):
+        return (key in self._state)
+
+    def items(self):
+        return self._connections.items()
+
+    def keys(self):
+        return self._connections.keys()
+
+    def values(self):
+        return self._connections.values()
 
     def update(self, timestamp, **kwargs):
         """Update multiple items from a given timestamp. Supposed to be used

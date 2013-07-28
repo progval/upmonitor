@@ -8,10 +8,11 @@ from upmonitor.database import get_absolute_dict as absdict
 __all__ = ['Plugin']
 
 class Plugin:
-    _instances = []
+    _instances = {}
     def __init__(self, my_hostname, plugin_conf, conf, database):
-        self._instances.append(self)
-        self.log = logging.getLogger(self.__class__.__name__)
+        self.name = self.__class__.__name__
+        self._instances[self.name] = self
+        self.log = logging.getLogger(self.name)
         self.my_hostname = my_hostname
         self.plugin_conf = plugin_conf
         self.conf = conf
@@ -42,7 +43,7 @@ class Plugin:
             it is not.
         :param slave_hostname: Hostname of the slave whose associated state
             has been updated."""
-        for plugin in cls._instances:
+        for plugin in cls._instances.values():
             if not hasattr(plugin, 'on_key_update'):
                 continue
             for (key, new_value) in new_state.items():
@@ -51,6 +52,18 @@ class Plugin:
                 plugin.on_key_update(my_hostname, slave_hostname, key,
                         old_value[0], old_value[1],
                         new_value[0], new_value[1])
+
+    @classmethod
+    def dispatch_approved_intent(cls, plugin, id, extra=None):
+        """Call the `on_approved_intent` method of the appropriate plugin."""
+        assert plugin in cls._instances
+        assert hasattr(cls._instances[plugin], 'on_approved_intent')
+        cls._instances[plugin].on_approved_intent(id, extra)
+    def create_intent(self, id, extra=None):
+        """Create an intent and notify network handlers."""
+        from upmonitor import handlers
+        handlers.Handler.create_intent(self.name, id, extra)
+
 
     def post_update_state(self, old_state, new_state,
             monitor_hostname, slave_hostname):

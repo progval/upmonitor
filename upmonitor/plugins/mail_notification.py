@@ -17,12 +17,13 @@ class MailNotification(Plugin):
                     (monitor_hostname == self.my_hostname and
                     self.conf['hosts'][self.my_hostname]['monitor'][slave_hostname][notify_key]):
                 # TODO: Prevent other hosts from doing the same
-                self._send_notification(monitor_hostname, slave_hostname,
-                        new_value)
+                self.create_intent([monitor_hostname, slave_hostname,
+                    new_timestamp, new_value])
             else:
                 # This host will handle it itself
                 return
-    def _send_notification(self, monitor_hostname, slave_hostname, new_status):
+    def on_approved_intent(self, id_, extra):
+        (monitor_hostname, slave_hostname, timestamp, new_status) = id_
         variables = {
                 'my_hostname': self.my_hostname,
                 'monitor_hostname': monitor_hostname,
@@ -32,6 +33,7 @@ class MailNotification(Plugin):
         # TODO: This should be configurable on a per-host basis.
         smtp = smtplib.SMTP('localhost')
         for recipient in self.conf['contact']:
+            self.log.info('Sending mail to %s.' % recipient)
             msg = MIMEText(_("Mail notification from %(my_hostname)s's "
                     "upmonitor:\n\n"
                     "connection from %(monitor_hostname)s to %(slave_hostname)s "
@@ -41,7 +43,7 @@ class MailNotification(Plugin):
             msg['From'] = 'upmonitor'
             msg['To'] = recipient
 
-            smtp.send_message(msg)
+            #smtp.send_message(msg)
         smtp.close()
 
 
