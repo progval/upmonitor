@@ -115,6 +115,9 @@ class Handler(networking.Handler):
         cls._intents[plugin].append([id, handler._my_hostname,
                 set([handler._my_hostname]), False, extra])
 
+    #################################################################
+    # Connection and handshake
+
     def handle_connect(self):
         """Sends a handshake to the host."""
         logging.info('Sending handshake to %s.' % 
@@ -167,6 +170,9 @@ class Handler(networking.Handler):
         assert ok
         self.call.request_state()
         self.call.request_intents()
+
+    #################################################################
+    # Database
 
     @check_auth
     def on_request_state(self, monitor_hostname=None, slave_hostname=None):
@@ -235,6 +241,9 @@ class Handler(networking.Handler):
                     if performed:
                         continue
                     self.perform_intent(plugin, intent)
+
+    #################################################################
+    # Intents
 
     @check_auth
     def on_request_intents(self):
@@ -376,6 +385,8 @@ class Handler(networking.Handler):
                         plugin=plugin,
                         id=id)
 
+    #################################################################
+    # Connection closed
 
     def handle_close(self):
         super(Handler, self).handle_close()
