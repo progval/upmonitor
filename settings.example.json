@@ -3,13 +3,16 @@
         "bofh@example.org"
     ],
     "log": {
-        "level": "DEBUG",
+        "level": "INFO",
         "format": "%(asctime)s %(levelname)s: %(message)s"
     },
     "interval": 10,
     "secret": "random passphrase",
     "plugins": {
         "upmonitor/plugins/debug.py": {
+        },
+        "upmonitor/plugins/mail_notification.py": {
+            "dry_run": true
         }
     },
     "hosts": {
@@ -21,13 +24,13 @@
             "monitor": {
                 "Server": {
                     "address": "server.example.org",
-                    "notify-down": false,
-                    "notify-up": false
+                    "notify_down": false,
+                    "notify_up": false
                 },
                 "Desktop_Two": {
                     "address": "192.168.1.156",
-                    "notify-down": true,
-                    "notify-up": true
+                    "notify_down": true,
+                    "notify_up": true
                 }
             }
         },
@@ -39,13 +42,13 @@
             "monitor": {
                 "Desktop_One": {
                     "address": "192.168.1.150",
-                    "notify-down": true,
-                    "notify-up": true
+                    "notify_down": true,
+                    "notify_up": true
                 },
                 "Server": {
                     "address": "server.example.org",
-                    "notify-down": false,
-                    "notify-up": false
+                    "notify_down": false,
+                    "notify_up": false
                 }
             }
         },
@@ -57,13 +60,13 @@
             "monitor": {
                 "Desktop_One": {
                     "address": "home.example.org",
-                    "notify-down": true,
-                    "notify-up": true
+                    "notify_down": true,
+                    "notify_up": true
                 },
                 "Desktop_Two": {
                     "address": "home.example.org",
-                    "notify-down": true,
-                    "notify-up": true
+                    "notify_down": true,
+                    "notify_up": true
                 }
             }
         }
