@@ -1,5 +1,9 @@
+import time
+import sched
+import asyncore
+import functools
 
-__all__ = ['NetworkGraph']
+__all__ = ['NetworkGraph', 'scheduler']
 
 class NetworkGraph:
     """Utility for manipulating network graphs. All links are reciprocal.
@@ -41,3 +45,6 @@ class NetworkGraph:
                 reachable |= self.nodes[hostname].connections.keys()
             browsed |= this_round
         return reachable
+
+scheduler = sched.scheduler(timefunc=time.time,
+        delayfunc=functools.partial(asyncore.loop, count=1))

@@ -4,6 +4,8 @@ import msgpack
 import asyncore
 import traceback
 
+from . import utils
+
 __all__ = ['Handler', 'run']
 
 class CannotConnect(Exception):
@@ -87,7 +89,11 @@ class Handler(asyncore.dispatcher_with_send):
 def run():
     """Run the network drivers."""
     try:
-        asyncore.loop()
+        while True:
+            if utils.scheduler.empty():
+                asyncore.loop(1.0, count=1)
+            else:
+                utils.scheduler.run()
     except KeyboardInterrupt:
         print('Received Ctrl-C. Exiting.')
         return

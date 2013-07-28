@@ -24,11 +24,15 @@
             "monitor": {
                 "Server": {
                     "address": "server.example.org",
+                    "connect_delay": 5,
+                    "reconnect_delay": 0,
                     "notify_down": false,
                     "notify_up": false
                 },
                 "Desktop_Two": {
                     "address": "192.168.1.156",
+                    "connect_delay": 5,
+                    "reconnect_delay": 0,
                     "notify_down": true,
                     "notify_up": true
                 }
@@ -42,11 +46,15 @@
             "monitor": {
                 "Desktop_One": {
                     "address": "192.168.1.150",
+                    "connect_delay": 5,
+                    "reconnect_delay": 0,
                     "notify_down": true,
                     "notify_up": true
                 },
                 "Server": {
                     "address": "server.example.org",
+                    "connect_delay": 5,
+                    "reconnect_delay": 0,
                     "notify_down": false,
                     "notify_up": false
                 }
@@ -60,11 +68,15 @@
             "monitor": {
                 "Desktop_One": {
                     "address": "home.example.org",
+                    "connect_delay": 5,
+                    "reconnect_delay": 0,
                     "notify_down": true,
                     "notify_up": true
                 },
                 "Desktop_Two": {
                     "address": "home.example.org",
+                    "connect_delay": 5,
+                    "reconnect_delay": 0,
                     "notify_down": true,
                     "notify_up": true
                 }

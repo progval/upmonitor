@@ -406,15 +406,41 @@ class Server(Handler):
 class Client(Handler):
     """Handles connection to a server."""
     def __init__(self, host, port, *args, **kwargs):
+        self.__host = host
+        self.__port = port
         super(Client, self).__init__(*args, **kwargs)
-        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.connect((host, port))
+        self.initialize_connection()
+
+    def initialize_connection(self):
+        self._next_initialization_scheduled = False
+        if not self.connected and not self.connecting:
+            logging.info('Connecting to %s' % self._other_hostname)
+            self.connecting = True
+            self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.connect((self.__host, self.__port))
 
     def handle_connect_event(self):
+        self.connecting = False
         try:
             super(Client, self).handle_connect_event()
         except (ConnectionRefusedError, socket.error):
             logging.error('Connection refused by %s' % self._other_hostname)
+            if hasattr(self, '_db_connection') and \
+                    self._db_connection['connected']:
+                self._db_connection.update_one(time.time(), 'connected', False)
+                self.perform_approved_intents()
+            utils.scheduler.enter(self._conf['hosts'][self._my_hostname]\
+                        ['monitor'][self._other_hostname]['connect_delay'],
+                    1, self.initialize_connection, argument=[])
+            self._next_initialization_scheduled = True
+
+    def handle_close(self):
+        super(Client, self).handle_close()
+        if not self._next_initialization_scheduled:
+            logging.error('Connection closed by %s' % self._other_hostname)
+            utils.scheduler.enter(self._conf['hosts'][self._my_hostname]\
+                        ['monitor'][self._other_hostname]['reconnect_delay'],
+                    1, self.initialize_connection, argument=[])
 
 class ServerDriver(asyncore.dispatcher_with_send):
     """Factory of ClientHandler objects."""
