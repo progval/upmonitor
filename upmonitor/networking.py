@@ -79,7 +79,6 @@ class Handler(asyncore.dispatcher_with_send):
                 getattr(plugin, 'post_' + command)(**kwargs)
 
     def on_ping(self, token):
-        assert isinstance(token, str)
         self.call.pong(token=token)
 
     def handle_error(self):

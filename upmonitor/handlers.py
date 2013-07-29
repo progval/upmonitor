@@ -7,6 +7,7 @@ import base64
 import xmlrpc
 import logging
 import asyncore
+import threading
 import traceback
 
 from . import utils
@@ -26,6 +27,13 @@ class INTENT:
     APPROVALS = 2
     PERFORMED = 3
     EXTRA = 4
+
+class PING:
+    TARGET = 0
+    PLUGIN = 1
+    LOCAL_TIMESTAMP = 2
+    EXTRA = 3
+
 
 def check_auth(f):
     """Utility decorator to check the remote host has already been
@@ -55,6 +63,15 @@ def host_precedence(host1, host2):
     else:
         return 1
 
+_last_uid = 0
+_uid_lock = threading.Lock()
+def uid():
+    """Return an unique ID (obtained with thread-safe incrementation)."""
+    global _last_uid, _uid_lock
+    with _uid_lock:
+        _last_uid += 1
+        return _last_uid
+
 class Handler(networking.Handler):
 
     _instances = {}
@@ -62,8 +79,14 @@ class Handler(networking.Handler):
     client."""
     _intents = {}
     """Dictionnary of
-    {plugin: [(id, creator, approvals, performed, data), ...], ...}
+    {plugin: [(id, creator, approvals, performed, extra), ...], ...}
     where the tuple represents an intent."""
+    _pings = {}
+    """Dictionnary of {(creator, id): (target, plugin, local_timestamp, extra)}
+    where the local_timestamp is the timestamp of *this* host when the ping
+    request has actually been sent."""
+    _pongs = {}
+    """Dict of {(creator, id): {pinged_by}}."""
 
     def __init__(self, conf, database, plugins,
             my_hostname, other_hostname=None, sock=None):
@@ -124,9 +147,55 @@ class Handler(networking.Handler):
                         approvals=[handler._my_hostname],
                         plugin=plugin,
                         id=id)
-        # FIXME: We should not use handler._my_hostname here.
-        cls._intents[plugin].append([id, handler._my_hostname,
-                set([handler._my_hostname]), False, extra])
+        cls._intents[plugin].append([id, cls._my_hostname,
+                set([cls._my_hostname]), False, extra])
+
+    @classmethod
+    def request_ping(cls, plugin, target=None, standard_ping=True,
+            data=None, extra=None, direct_ping=True):
+        """Request all hosts of the network to ping something (usually
+        a given host). 
+
+        :param plugin: The plugin requesting this ping.
+        :param target: The target host (if this is a standard ping).
+        :param standard_ping: Determines whether the ping will be done
+            using the 'ping' command of the protocol or if we will ask
+            the plugin (on the remote host) to perform a custom ping.
+        :param data: If `standard_ping` is True, this data will be
+            provided to the plugin when pinging. It has to be
+            serializable.
+        :param extra: Data that will be given to the plugin every time
+            it is notified of a pong. Does not have to be serializable as
+            it will not be sent over network.
+        :param direct_ping: Determines whether or not this host will
+            make a ping too."""
+        if not standard_ping:
+            raise NotImplementedError()
+        assert not standard_ping or data is None
+        id = uid()
+        key = (cls._my_hostname, id)
+        assert key not in cls._pings
+        cls._pings[key] = \
+                [target, plugin, None, extra]
+        ping_plugin = None if standard_ping else plugin # Plugin used for pinging
+        for handler in cls._instances.values():
+            if handler._authenticated:
+                if target == handler._other_hostname:
+                    handler.make_ping(cls._my_hostname, id, ping_plugin, data)
+                else:
+                    handler.call.request_ping(
+                        creator=cls._my_hostname,
+                        id=id,
+                        target=target,
+                        plugin=ping_plugin,
+                        data=data)
+        if direct_ping and target == cls._my_hostname:
+            if standard_ping:
+                key = (cls._my_hostname, id)
+                plugins.Plugin.dispatch_pong_notification(plugin,
+                        cls._my_hostname, cls._my_hostname, 0, extra)
+            else:
+                raise NotImplementedError()
 
     #################################################################
     # Connection and handshake
@@ -399,6 +468,128 @@ class Handler(networking.Handler):
                 instance.call.delete_intent(
                         plugin=plugin,
                         id=id)
+
+    #################################################################
+    # Ping
+
+    @check_auth
+    def on_request_ping(self, creator, id, target, plugin, data=None):
+        """Asks us to perform a ping.
+
+        :param creator: The creator of this ping request.
+        :param id: An ID for this ping request (it has to be defined
+            in such a way that the (creator, id) tuple is unique.
+        :param target: The target of the ping.
+        :param plugin: The plugin that should be use to make
+            the ping request. If None, the native 'ping' command
+            of the protocol will be used.
+        :parram data: Any data the plugin needs to perform its ping."""
+        key = (creator, id)
+        if key in self._pings:
+            return
+        assert creator != self._my_hostname
+        self._pings[key] = [target, plugin, None, None]
+        if target == self._my_hostname:
+            assert creator != self._my_hostname
+            if plugin is None:
+                self.call.pong_notification(
+                        creator=creator,
+                        id=id,
+                        pinged_by=self._my_hostname,
+                        latency=0)
+            else:
+                raise NotImplementedError()
+        elif target == self._other_hostname:
+            self.make_ping(creator, id, plugin, data)
+        else:
+            for handler in self._instances.values():
+                if handler is not self and handler._authenticated:
+                    handler.call.request_ping(
+                        creator=creator,
+                        id=id,
+                        target=target,
+                        plugin=plugin,
+                        data=data)
+
+    def make_ping(self, creator, id, plugin, data):
+        if plugin is None:
+            assert self._pings[(creator, id)][PING.LOCAL_TIMESTAMP] is None
+            self._pings[(creator, id)][PING.LOCAL_TIMESTAMP] = time.time()
+            self.call.ping(token=(creator, id))
+        else:
+            self.call.request_ping(
+                creator=creator,
+                id=id,
+                target=self._other_hostname,
+                plugin=plugin,
+                data=data)
+
+    @check_auth
+    def on_pong(self, token):
+        """Reply to a 'ping'.
+
+        :param token: The token we sent in the 'ping' request.
+        """
+        assert isinstance(token, list)
+        assert len(token) == 2
+        token = tuple(token)
+        assert token in self._pings
+        if token not in self._pongs:
+            self._pongs[token] = set()
+        assert self._my_hostname not in self._pongs[token]
+        self._pongs[token] |= {self._my_hostname}
+        latency = time.time()-self._pings[token][PING.LOCAL_TIMESTAMP]
+        (creator, id) = token
+
+        if creator == self._my_hostname:
+            self.handle_pong(id, self._my_hostname, latency)
+        else:
+            for handler in self._instances.values():
+                if handler._authenticated:
+                    handler.call.pong_notification(
+                            creator=creator,
+                            id=id,
+                            pinged_by=self._my_hostname,
+                            latency=latency)
+
+    @check_auth
+    def on_pong_notification(self, creator, id, pinged_by, latency):
+        """Called when another host received a pong. Handle it if we are the
+        author of the ping; relay it if we are not.
+        
+        :param creator: The creator of the ping request
+        :param id: Ping id.
+        :param pinged_by: The host which sent the ping (and received the pong)
+        :param latency: The delta between the moment the ping was sent
+            and the moment the pong was received."""
+        key = (creator, id)
+        if key not in self._pongs:
+            self._pongs[key] = set()
+        if pinged_by in self._pongs[key]:
+            return
+        self._pongs[key] |= {pinged_by}
+        if creator == self._my_hostname:
+            self.handle_pong(id, pinged_by, latency)
+        else:
+            for handler in self._instances.values():
+                if handler._authenticated:
+                    handler.call.pong_notification(
+                            creator=creator,
+                            id=id,
+                            pinged_by=pinged_by,
+                            latency=latency)
+
+    def handle_pong(self, id, pinged_by, latency):
+        """Called after any pong or pong_notification in reply of one of
+        the ping requests we made."""
+        key = (self._my_hostname, id)
+        assert key in self._pings
+        (target, plugin, local_timestamp, extra) = self._pings[key]
+        assert plugin is not None
+        plugins.Plugin.dispatch_pong_notification(plugin, pinged_by, target,
+                latency, extra)
+
+
 
     #################################################################
     # Connection closed

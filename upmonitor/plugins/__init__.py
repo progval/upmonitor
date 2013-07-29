@@ -10,9 +10,11 @@ __all__ = ['Plugin']
 class Plugin:
     _instances = {}
     def __init__(self, my_hostname, plugin_conf, conf, database):
+        assert self.__class__ is not Plugin
         self.name = self.__class__.__name__
         self._instances[self.name] = self
         self.log = logging.getLogger(self.name)
+        self.log.debug('Loading plugin %s' % self.name)
         self.my_hostname = my_hostname
         self.plugin_conf = plugin_conf
         self.conf = conf
@@ -63,6 +65,17 @@ class Plugin:
         """Create an intent and notify network handlers."""
         from upmonitor import handlers
         handlers.Handler.create_intent(self.name, id, extra)
+
+    def request_ping(self, *args, **kwargs):
+        from upmonitor import handlers
+        handlers.Handler.request_ping(self.name, *args, **kwargs)
+    @classmethod
+    def dispatch_pong_notification(cls, plugin, pinged_by, target, latency,
+            extra):
+        assert plugin in cls._instances
+        assert hasattr(cls._instances[plugin], 'on_pong_notification'), plugin
+        cls._instances[plugin].on_pong_notification(pinged_by, target, latency,
+                extra)
 
 
     def post_update_state(self, old_state, new_state,

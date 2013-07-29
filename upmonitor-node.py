@@ -20,6 +20,7 @@ if __name__ == '__main__':
     my_hostname = socket.gethostname()
     if my_hostname not in conf['hosts']:
         print('Error: Not in hosts list.', file=sys.stderr)
+    Handler._my_hostname = my_hostname
 
     database = Database(conf['hosts'].keys())
     database[my_hostname].add_callback(
