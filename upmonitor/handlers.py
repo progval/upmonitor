@@ -379,6 +379,10 @@ class Handler(networking.Handler):
 
     @check_auth
     def on_delete_intent(self, plugin, id):
+        """Mark an intent as performed and relay it.
+
+        :param plugin: The plugin that created the intent
+        :param id: The intent ID."""
         if plugin not in self._intents:
             return
         for intent in self._intents[plugin]:
