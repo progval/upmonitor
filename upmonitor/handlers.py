@@ -42,6 +42,19 @@ def check_auth(f):
     newf.__repr__ = f.__repr__
     return newf
 
+def host_precedence(host1, host2):
+    """Returns -1 if host1 has precedence, 0 if both hosts are equal, and
+    1 if host2 has precedence."""
+    # We use alphabetical order to determine precedance.
+    # This *MUST* be consistant over ALL connected hosts or intent handling
+    # will be inconsistent.
+    if host1 > host2:
+        return -1
+    elif host1 == host2:
+        return 0
+    else:
+        return 1
+
 class Handler(networking.Handler):
 
     _instances = {}
@@ -346,10 +359,8 @@ class Handler(networking.Handler):
             return
         # So now we have two similar but different intents, and have
         # to determine precedance.
-        if old_intent[INTENT.CREATOR] >= new_intent[INTENT.CREATOR]:
-            # Here we use alphabetical order to determine precedance.
-            # This *MUST* be consistant over ALL connected hosts or
-            # intent handling will be inconsistent.
+        if host_precedence(old_intent[INTENT.CREATOR],
+                new_intent[INTENT.CREATOR]) <= 0:
             prio_intent = old_intent
         else:
             prio_intent = new_intent
