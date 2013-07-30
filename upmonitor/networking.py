@@ -84,9 +84,6 @@ class Handler(asyncore.dispatcher_with_send):
             if hasattr(plugin, 'post_' + command):
                 getattr(plugin, 'post_' + command)(**kwargs)
 
-    def on_ping(self, token):
-        self.call.pong(token=token)
-
     def handle_error(self):
         traceback.print_exc()
 

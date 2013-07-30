@@ -565,6 +565,12 @@ class Handler(networking.Handler):
                 plugin=plugin,
                 data=data)
 
+    def on_ping(self, token):
+        """Reply with a pong.
+
+        :param token: A token that will be sent with the 'pong'."""
+        self.call.pong(token=token)
+
     @check_auth
     def on_pong(self, token):
         """Reply to a 'ping'.
