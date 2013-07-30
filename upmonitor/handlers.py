@@ -77,16 +77,6 @@ class Handler(networking.Handler):
     _instances = {}
     """Dictionnary of client handler which successfully authenticated the
     client."""
-    _intents = {}
-    """Dictionnary of
-    {plugin: [(id, creator, approvals, performed, extra), ...], ...}
-    where the tuple represents an intent."""
-    _pings = {}
-    """Dictionnary of {(creator, id): (target, plugin, local_timestamp, extra)}
-    where the local_timestamp is the timestamp of *this* host when the ping
-    request has actually been sent."""
-    _pongs = {}
-    """Dict of {(creator, id): {pinged_by}}."""
 
     def __init__(self, conf, database, plugins,
             my_hostname, other_hostname=None, sock=None):
@@ -99,103 +89,6 @@ class Handler(networking.Handler):
         """Whether or not the remote host successfully signed the token."""
         self._token = base64.b64encode(os.urandom(64))
         """Random token used as salt for this session."""
-
-    @classmethod
-    def propagate_local_database_update(cls, old_state, updated,
-            my_hostname, slave_hostname=None):
-        """Sends an 'update_state' to all connected hosts about a database
-        update made locally (ie. not from network).
-
-        :param updated: dictionnary of updated values if `slave_hostname`
-            is set, and dictionnary of dictionnaries of updated values if
-            it is not.
-        :param slave_hostname: Hostname of the slave whose associated state
-            has been updated."""
-        for handler in cls._instances.values():
-            if handler._authenticated:
-                handler.call.update_state(new_state=updated,
-                        monitor_hostname=my_hostname,
-                        slave_hostname=slave_hostname)
-
-    @classmethod
-    def create_intent(cls, plugin, id, extra=None):
-        """Creates an intent, ie. notify the network a plugin wants to do
-        something, and make sure no other host will do the same thing (and
-        if any of them wants to, the network will determine precedence
-        between it and us).
-
-        :param plugin: The name of the plugin creating this intent.
-        :param id: An ID determined by the plugin. It has to be unique to
-            this action, but has to be chosen in such a way that any other
-            host that would do the same action would chose the same ID.
-            (eg. Do not use local timestamps. However, if this is as a
-            reaction to a database change of *one* host, it might be fine
-            to use the timestamp declared by this host.)
-            Can be any serializable type.
-        :param extra: Any extra data that will be sent to the plugin
-            callback if it is decided that we will perform this intent.
-            It won't be sent over network so it is ok if it is not
-            serializable."""
-        if plugin not in cls._intents:
-            cls._intents[plugin] = []
-        logging.debug('Creating intent. Plugin: %s, id: %s' %
-                (plugin, id))
-        for handler in cls._instances.values():
-            if handler._authenticated:
-                handler.call.new_intent(
-                        creator=handler._my_hostname,
-                        approvals=[handler._my_hostname],
-                        plugin=plugin,
-                        id=id)
-        cls._intents[plugin].append([id, cls._my_hostname,
-                set([cls._my_hostname]), False, extra])
-
-    @classmethod
-    def request_ping(cls, plugin, target=None, standard_ping=True,
-            data=None, extra=None, direct_ping=True):
-        """Request all hosts of the network to ping something (usually
-        a given host). 
-
-        :param plugin: The plugin requesting this ping.
-        :param target: The target host (if this is a standard ping).
-        :param standard_ping: Determines whether the ping will be done
-            using the 'ping' command of the protocol or if we will ask
-            the plugin (on the remote host) to perform a custom ping.
-        :param data: If `standard_ping` is True, this data will be
-            provided to the plugin when pinging. It has to be
-            serializable.
-        :param extra: Data that will be given to the plugin every time
-            it is notified of a pong. Does not have to be serializable as
-            it will not be sent over network.
-        :param direct_ping: Determines whether or not this host will
-            make a ping too."""
-        if not standard_ping:
-            raise NotImplementedError()
-        assert not standard_ping or data is None
-        id = uid()
-        key = (cls._my_hostname, id)
-        assert key not in cls._pings
-        cls._pings[key] = \
-                [target, plugin, None, extra]
-        ping_plugin = None if standard_ping else plugin # Plugin used for pinging
-        for handler in cls._instances.values():
-            if handler._authenticated:
-                if target == handler._other_hostname:
-                    handler.make_ping(cls._my_hostname, id, ping_plugin, data)
-                else:
-                    handler.call.request_ping(
-                        creator=cls._my_hostname,
-                        id=id,
-                        target=target,
-                        plugin=ping_plugin,
-                        data=data)
-        if direct_ping and target == cls._my_hostname:
-            if standard_ping:
-                key = (cls._my_hostname, id)
-                plugins.Plugin.dispatch_pong_notification(plugin,
-                        cls._my_hostname, cls._my_hostname, 0, extra)
-            else:
-                raise NotImplementedError()
 
     #################################################################
     # Connection and handshake
@@ -255,6 +148,23 @@ class Handler(networking.Handler):
 
     #################################################################
     # Database
+
+    @classmethod
+    def propagate_local_database_update(cls, old_state, updated,
+            my_hostname, slave_hostname=None):
+        """Sends an 'update_state' to all connected hosts about a database
+        update made locally (ie. not from network).
+
+        :param updated: dictionnary of updated values if `slave_hostname`
+            is set, and dictionnary of dictionnaries of updated values if
+            it is not.
+        :param slave_hostname: Hostname of the slave whose associated state
+            has been updated."""
+        for handler in cls._instances.values():
+            if handler._authenticated:
+                handler.call.update_state(new_state=updated,
+                        monitor_hostname=my_hostname,
+                        slave_hostname=slave_hostname)
 
     @check_auth
     def on_request_state(self, monitor_hostname=None, slave_hostname=None):
@@ -326,6 +236,44 @@ class Handler(networking.Handler):
 
     #################################################################
     # Intents
+
+    _intents = {}
+    """Dictionnary of
+    {plugin: [(id, creator, approvals, performed, extra), ...], ...}
+    where the tuple represents an intent."""
+
+    @classmethod
+    def create_intent(cls, plugin, id, extra=None):
+        """Creates an intent, ie. notify the network a plugin wants to do
+        something, and make sure no other host will do the same thing (and
+        if any of them wants to, the network will determine precedence
+        between it and us).
+
+        :param plugin: The name of the plugin creating this intent.
+        :param id: An ID determined by the plugin. It has to be unique to
+            this action, but has to be chosen in such a way that any other
+            host that would do the same action would chose the same ID.
+            (eg. Do not use local timestamps. However, if this is as a
+            reaction to a database change of *one* host, it might be fine
+            to use the timestamp declared by this host.)
+            Can be any serializable type.
+        :param extra: Any extra data that will be sent to the plugin
+            callback if it is decided that we will perform this intent.
+            It won't be sent over network so it is ok if it is not
+            serializable."""
+        if plugin not in cls._intents:
+            cls._intents[plugin] = []
+        logging.debug('Creating intent. Plugin: %s, id: %s' %
+                (plugin, id))
+        for handler in cls._instances.values():
+            if handler._authenticated:
+                handler.call.new_intent(
+                        creator=handler._my_hostname,
+                        approvals=[handler._my_hostname],
+                        plugin=plugin,
+                        id=id)
+        cls._intents[plugin].append([id, cls._my_hostname,
+                set([cls._my_hostname]), False, extra])
 
     @check_auth
     def on_request_intents(self):
@@ -471,6 +419,60 @@ class Handler(networking.Handler):
 
     #################################################################
     # Ping
+
+    _pings = {}
+    """Dictionnary of {(creator, id): (target, plugin, local_timestamp, extra)}
+    where the local_timestamp is the timestamp of *this* host when the ping
+    request has actually been sent."""
+    _pongs = {}
+    """Dict of {(creator, id): {pinged_by}}."""
+
+    @classmethod
+    def request_ping(cls, plugin, target=None, standard_ping=True,
+            data=None, extra=None, direct_ping=True):
+        """Request all hosts of the network to ping something (usually
+        a given host).
+
+        :param plugin: The plugin requesting this ping.
+        :param target: The target host (if this is a standard ping).
+        :param standard_ping: Determines whether the ping will be done
+            using the 'ping' command of the protocol or if we will ask
+            the plugin (on the remote host) to perform a custom ping.
+        :param data: If `standard_ping` is True, this data will be
+            provided to the plugin when pinging. It has to be
+            serializable.
+        :param extra: Data that will be given to the plugin every time
+            it is notified of a pong. Does not have to be serializable as
+            it will not be sent over network.
+        :param direct_ping: Determines whether or not this host will
+            make a ping too."""
+        if not standard_ping:
+            raise NotImplementedError()
+        assert not standard_ping or data is None
+        id = uid()
+        key = (cls._my_hostname, id)
+        assert key not in cls._pings
+        cls._pings[key] = \
+                [target, plugin, None, extra]
+        ping_plugin = None if standard_ping else plugin # Plugin used for pinging
+        for handler in cls._instances.values():
+            if handler._authenticated:
+                if target == handler._other_hostname:
+                    handler.make_ping(cls._my_hostname, id, ping_plugin, data)
+                else:
+                    handler.call.request_ping(
+                        creator=cls._my_hostname,
+                        id=id,
+                        target=target,
+                        plugin=ping_plugin,
+                        data=data)
+        if direct_ping and target == cls._my_hostname:
+            if standard_ping:
+                key = (cls._my_hostname, id)
+                plugins.Plugin.dispatch_pong_notification(plugin,
+                        cls._my_hostname, cls._my_hostname, 0, extra)
+            else:
+                raise NotImplementedError()
 
     @check_auth
     def on_request_ping(self, creator, id, target, plugin, data=None):
