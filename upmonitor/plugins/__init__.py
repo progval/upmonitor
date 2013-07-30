@@ -22,6 +22,8 @@ class Plugin:
 
     @staticmethod
     def load_plugin(path, my_hostname, plugin_conf, conf, database):
+        """Tries to load a plugin and display an error in the log if
+        it failed."""
         try:
             name = os.path.splitext(os.path.split(path)[1])[0]
             module = imp.load_source(name, path)
@@ -67,6 +69,10 @@ class Plugin:
         handlers.Handler.create_intent(self.name, id, extra)
 
     def request_ping(self, *args, **kwargs):
+        """Ask all connection :py:class:`upmonitor.handlers.Handler`s to
+        request a ping. All arguments are passed to
+        :py:meth:handlers.Handler.request_ping, with the plugin name preprended
+        to the list of arguments."""
         from upmonitor import handlers
         handlers.Handler.request_ping(self.name, *args, **kwargs)
     @classmethod

@@ -95,14 +95,14 @@ class Handler(networking.Handler):
 
     def handle_connect(self):
         """Sends a handshake to the host."""
-        logging.info('Sending handshake to %s.' % 
+        logging.info('Sending handshake to %s.' %
                 (self._other_hostname or '<unknown>'))
         self.call.handshake(version=PROTOCOL_VERSION, token=self._token,
                 hostname=self._my_hostname)
 
     def on_handshake(self, version, token, hostname):
         """Should be the first function called by any of the peers.
-        
+
         :param version: Protocol version
         :param token: Random token string
         :param hostname: Hostname of the peer calling 'handshake'."""
@@ -121,7 +121,7 @@ class Handler(networking.Handler):
 
     def on_validate_handshake(self, signed_token):
         """Reply to a 'handshake' command.
-        
+
         :param signed_token: hexadecimal digest of an hmap token created
             with the secret key + token given in 'handshake' + hostname
             of the peer signing the token."""
@@ -176,7 +176,7 @@ class Handler(networking.Handler):
         :param slave_hostname: Can only be given if `monitor_hostname`
             is given. If given, will send the state of a connection
             (the one used by `monitor_hostname` to monitor
-            `slave_hostname) instead of all host's connections."""
+            `slave_hostname` instead of all host's connections."""
         logging.info('State request from %s.' % self._other_hostname)
         state = self._database.get_from_hostnames(
                 monitor_hostname=monitor_hostname,
@@ -194,10 +194,10 @@ class Handler(networking.Handler):
         Also has the side-effect of sending `update_state` with the
         *actually* updated values (ie. those newer than the ones already
         registered) to all connected hosts.
-        
+
         :param new_state: A dictionnary representing the values to update.
-        :param monitor_hostname: See `on_request_state`. 
-        :param slave_hostname: See `on_request_state`.
+        :param monitor_hostname: See :py:meth:`.Handler.on_request_state`.
+        :param slave_hostname: See :py:meth:`.Handler.on_request_state`.
         """
         logging.info('State received from %s.' % self._other_hostname)
         state = self._database.get_from_hostnames(
@@ -224,6 +224,8 @@ class Handler(networking.Handler):
         self.perform_approved_intents()
 
     def perform_approved_intents(self):
+        """Called when an host disconnects. Performs all intents
+        that were only waiting for this host to approve."""
         graph = utils.NetworkGraph(self._database)
         for (plugin, intents) in self._intents.items():
             for intent in intents:
@@ -277,6 +279,8 @@ class Handler(networking.Handler):
 
     @check_auth
     def on_request_intents(self):
+        """Reply with a 'new_intents' command. Usually called on
+        connection."""
         self.call.new_intents(intents={plugin:
             [(id, creator, list(approvals))
              for (id, creator, approvals, performed, extra) in intents
@@ -285,6 +289,10 @@ class Handler(networking.Handler):
 
     @check_auth
     def on_new_intents(self, intents):
+        """Notify about multiple intent creation. Usually in reply
+        of the 'request_intents' command.
+
+        :param intents: Dictionnary of `{plugin: (id, creator, approvals)}`"""
         for (plugin, plugin_intents) in intents.items():
             for (id, creator, approvals) in plugin_intents:
                 self.on_new_intent(plugin, id, creator, approvals)
@@ -323,7 +331,10 @@ class Handler(networking.Handler):
 
     def add_intent_to_list(self, plugin, intent):
         """Called when we are told about a new intent that we did not see before.
-        Archives and relays it."""
+        Archives and relays it.
+
+        :param plugin: The plugin which should be used to perform the ping.
+        :param intent: An intent tuple."""
         (id, creator, approvals, performed, extra) = intent
         logging.debug('New intent received. Plugin: %s, ID: %s, creator: %s.' %
                 (plugin, id, creator))
@@ -340,7 +351,10 @@ class Handler(networking.Handler):
     def perform_intent(self, plugin, intent):
         """Called when an intent has been created by us, and is approved
         by all connected hosts.
-        Performs the intent and let other hosts know."""
+        Performs the intent and let other hosts know.
+
+        :param plugin: The plugin which should be used to perform the ping.
+        :param intent: An intent tuple."""
         (id, creator, approvals, performed, extra) = intent
         logging.debug(('Performing intent. Plugin: %s, ID: %s, '
                        'creator: %s, approvals: %s.') %
@@ -361,7 +375,12 @@ class Handler(networking.Handler):
         """Called when we receive an intent with a (plugin, id)
         couple that is already in our intents list.
         We will determine precedence of creators, merge approvals,
-        and relay it."""
+        and relay it.
+
+        :param plugin: The plugin which created the intent.
+        :param old_intent: A tuple containing the already registered intent
+        :param new_intent: A tuple containing the intent just received
+            over network."""
         (id, creator, approvals, performed, extra) = old_intent
         (id, creator2, approvals2, foo, foo) = new_intent
         logging.debug(('Intent update. Plugin: %s, ID: %s. '
@@ -488,7 +507,7 @@ class Handler(networking.Handler):
         :param plugin: The plugin that should be use to make
             the ping request. If None, the native 'ping' command
             of the protocol will be used.
-        :parram data: Any data the plugin needs to perform its ping."""
+        :param data: Any data the plugin needs to perform its ping."""
         key = (creator, id)
         if key in self._pings:
             return
@@ -526,6 +545,14 @@ class Handler(networking.Handler):
                         data=data)
 
     def make_ping(self, creator, id, plugin, data):
+        """Perform a ping (if this is a standard ping) or relay it to the
+        target (if it is a custom ping).
+
+        :param creator: The hostname of the creator of this ping request.
+        :param id: The ID of this ping.
+        :param plugin: The plugin used to perform this ping (or None
+            if this is a standard ping).
+        :param data: Any data used by the plugin to perform this ping."""
         if plugin is None:
             assert self._pings[(creator, id)][PING.LOCAL_TIMESTAMP] is None
             self._pings[(creator, id)][PING.LOCAL_TIMESTAMP] = time.time()
@@ -571,7 +598,7 @@ class Handler(networking.Handler):
     def on_pong_notification(self, creator, id, pinged_by, status, latency):
         """Called when another host received a pong. Handle it if we are the
         author of the ping; relay it if we are not.
-        
+
         :param creator: The creator of the ping request
         :param id: Ping id.
         :param pinged_by: The host which sent the ping (and received the pong)
@@ -598,7 +625,14 @@ class Handler(networking.Handler):
 
     def handle_pong(self, id, pinged_by, status, latency):
         """Called after any pong or pong_notification in reply of one of
-        the ping requests we made."""
+        the ping requests *we* made.
+
+        :param id: The ID of the ping request
+        :param pinged_by: The hostname of the host which actually pinged
+            the host.
+        :param status: Status of the request, if applicable
+        :param latency: The delta between the moment the ping was sent
+            and the moment the pong was received."""
         key = (self._my_hostname, id)
         assert key in self._pings
         (target, plugin, local_timestamp, extra) = self._pings[key]
@@ -612,6 +646,7 @@ class Handler(networking.Handler):
     # Connection closed
 
     def handle_close(self):
+        """Called when the connection is closed or refused."""
         super(Handler, self).handle_close()
         if hasattr(self, '_db_connection') and \
                 self._db_connection['connected']:
@@ -627,6 +662,7 @@ class Server(Handler):
         self.handle_connect()
 
     def handle_close(self):
+        """Called when the connection is closed."""
         super(Server, self).handle_close()
         if self._other_hostname in Client._clients:
             utils.scheduler.enter(self._conf['hosts'][self._my_hostname]\
@@ -648,6 +684,8 @@ class Client(Handler):
         self.initialize_connection()
 
     def initialize_connection(self):
+        """Called by the constructor or by the scheduler to (re)connect
+        to the server."""
         self._next_initialization_scheduled = False
         if not self.connected and not self.connecting and \
                 self._other_hostname not in self._instances:
@@ -657,6 +695,7 @@ class Client(Handler):
             self.connect((self.__host, self.__port))
 
     def handle_connect_event(self):
+        """Called just after the connection, whether or not it succeeded."""
         self.connecting = False
         try:
             super(Client, self).handle_connect_event()
@@ -672,6 +711,7 @@ class Client(Handler):
             self._next_initialization_scheduled = True
 
     def handle_close(self):
+        """Called when the connection is closed or refused."""
         super(Client, self).handle_close()
         if not self._next_initialization_scheduled:
             utils.scheduler.enter(self._conf['hosts'][self._my_hostname]\
@@ -687,12 +727,14 @@ class ServerDriver(asyncore.dispatcher_with_send):
         self._kwargs = kwargs
 
     def _setup_network(self, host, port):
+        """Open the port and listen."""
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         self.set_reuse_addr()
         self.bind((host, port))
         self.listen(5)
 
     def handle_accept(self):
+        """Spawns a new :py:class:`.Server` instance."""
         (sock, addr) = self.accept()
         Server(sock, addr, self, *self._args, **self._kwargs)
 

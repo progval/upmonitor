@@ -70,9 +70,15 @@ class Handler(asyncore.dispatcher_with_send):
         return True
 
     def call_plugins_pre_callback(self, command, kwargs):
+        """Calls all plugins' callback associated with a given command
+        (pre_XXX where XXX is the name of the command).
+
+        :param command: The command name.
+        :param kwargs: Parameters given with the command."""
         for plugin in self._plugins:
             if hasattr(plugin, 'pre_' + command):
                 getattr(plugin, 'pre_' + command)(**kwargs)
+
     def call_plugins_post_callback(self, command, kwargs):
         for plugin in self._plugins:
             if hasattr(plugin, 'post_' + command):
