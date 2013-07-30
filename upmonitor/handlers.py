@@ -556,7 +556,7 @@ class Handler(networking.Handler):
         (creator, id) = token
 
         if creator == self._my_hostname:
-            self.handle_pong(id, self._my_hostname, latency)
+            self.handle_pong(id, self._my_hostname, None, latency)
         else:
             for handler in self._instances.values():
                 if handler._authenticated:
@@ -613,9 +613,9 @@ class Handler(networking.Handler):
 
     def handle_close(self):
         super(Handler, self).handle_close()
-        logging.error('Connection closed by %s' % self._other_hostname)
         if hasattr(self, '_db_connection') and \
                 self._db_connection['connected']:
+            logging.error('Connection closed by %s' % self._other_hostname)
             self._db_connection.update_one(time.time(), 'connected', False)
             self.perform_approved_intents()
 
@@ -674,7 +674,6 @@ class Client(Handler):
     def handle_close(self):
         super(Client, self).handle_close()
         if not self._next_initialization_scheduled:
-            logging.error('Connection closed by %s' % self._other_hostname)
             utils.scheduler.enter(self._conf['hosts'][self._my_hostname]\
                         ['monitor'][self._other_hostname]['reconnect_delay'],
                     1, self.initialize_connection, argument=[])
