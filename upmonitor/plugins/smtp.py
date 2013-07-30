@@ -12,6 +12,8 @@ class STATUS:
     OK = 2
 
 class Smtp(plugins.Plugin, asyncore.dispatcher):
+    __slots__ = ('_requests_lock', '_request_time', '_requests')
+
     def __init__(self, *args, **kwargs):
         plugins.Plugin.__init__(self, *args, **kwargs)
         asyncore.dispatcher.__init__(self)

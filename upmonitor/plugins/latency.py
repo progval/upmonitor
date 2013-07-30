@@ -2,6 +2,8 @@ import upmonitor.utils as utils
 from upmonitor.plugins import Plugin
 
 class Latency(Plugin):
+    __slots__ = tuple()
+
     def __init__(self, *args, **kwargs):
         super(Latency, self).__init__(*args, **kwargs)
         self.schedule()

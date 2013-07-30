@@ -13,6 +13,9 @@ class NetworkGraph:
             object and returns a boolean telling if the two hosts are
             connected. Defaults to
             `lambda x:'connected' in state and state['connected'])`"""
+
+    __slots__ = ('nodes',)
+
     class Node:
         """Represents an host of the network."""
         def __init__(self, hostname):

@@ -74,6 +74,9 @@ def uid():
 
 class Handler(networking.Handler):
 
+    __slots__ = ('_my_hostname', '_other_hostname', '_conf',
+            '_database', '_authenticated', '_token')
+
     _instances = {}
     """Dictionnary of client handler which successfully authenticated the
     client."""
@@ -680,6 +683,8 @@ class Server(Handler):
 
 class Client(Handler):
     """Handles connection to a server."""
+
+    __slots__ = ('_next_initialization_scheduled',)
 
     _clients = {}
     def __init__(self, host, port, *args, **kwargs):

@@ -5,6 +5,8 @@ from upmonitor.i18n import _
 from upmonitor.plugins import Plugin
 
 class MailNotification(Plugin):
+    __slots__ = tuple()
+
     def on_key_update(self, monitor_hostname, slave_hostname,
             key, old_timestamp, old_value, new_timestamp, new_value):
         assert old_timestamp is None or new_timestamp > old_timestamp

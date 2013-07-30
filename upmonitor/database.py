@@ -40,6 +40,8 @@ def get_absolute_dict(state, monitor_hostname=None, slave_hostname=None):
 class Database:
     """Distributed database storing up status of all hosts."""
 
+    __slots__ = ('_hosts',)
+
     def __init__(self, hostnames):
         self._hosts = {hostname: Host(hostname, hostnames)
                        for hostname in hostnames}
@@ -92,6 +94,8 @@ class Database:
 class Host:
     """Represents a host in the network."""
 
+    __slots__ = ('_my_hostname', '_callbacks', '_connections')
+
     def __init__(self, my_hostname, hostnames):
         self._my_hostname = my_hostname
         self._callbacks = []
@@ -143,6 +147,8 @@ class Host:
 
 class Connection:
     """Keeps an history of connection states between two hosts."""
+
+    __slots__ = ('_monitor_hostname', '_slave_hostname', '_callbacks', '_state')
 
     def __init__(self, monitor_hostname, slave_hostname, callbacks,
             state=None):

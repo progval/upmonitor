@@ -16,6 +16,7 @@ class NoDataReceived(Exception):
     pass
 
 class _MethodCaller:
+    __slots__ = ('_handler',)
     def __init__(self, handler):
         self._handler = handler
     def __getattr__(self, name):
@@ -29,6 +30,9 @@ class _MethodCaller:
 
 class Handler(asyncore.dispatcher_with_send):
     """Abstract class for managing a connection an events."""
+
+    __slots__ = ('_plugins', '_unpacker', 'call')
+
     def __init__(self, sock=None, plugins=None):
         super(Handler, self).__init__(sock)
         if plugins is None:
