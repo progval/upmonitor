@@ -46,5 +46,24 @@ class NetworkGraph:
             browsed |= this_round
         return reachable
 
+    def get_routes(self, host1, host2, exclude=None):
+        """Return all routes from host1 to host2."""
+        if host1 == host2:
+            return set([(host1,)])
+        exclude = exclude or set()
+        neighbors = self.nodes[host1].connections.keys() - exclude
+        if neighbors:
+            routes = set()
+            exclude = exclude | set([host1])
+            for neighbor in neighbors:
+                routes |= set([(host1,)+x for
+                               x in self.get_routes(neighbor, host2, exclude)
+                               if x])
+            return routes
+        else:
+            return set([tuple()])
+
+
+
 scheduler = sched.scheduler(timefunc=time.time,
         delayfunc=functools.partial(asyncore.loop, count=1))

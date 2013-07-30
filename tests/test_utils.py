@@ -22,6 +22,12 @@ class TestNetworkGraph(unittest.TestCase):
         database['Five']['Six'].update_one(5, 'connected', True)
         database['Six']['Five'].update_one(5, 'connected', True)
 
+        #          One---Four      Five
+        #          / \              |
+        #         /   \             |
+        #        /     \            |
+        #       Two---Three        Six
+
         graph = utils.NetworkGraph(database)
         self.assertEqual(graph.get_reachable('One'),
             set(['One', 'Two', 'Three', 'Four']))
@@ -29,3 +35,12 @@ class TestNetworkGraph(unittest.TestCase):
             set(['One', 'Two', 'Three', 'Four']))
         self.assertEqual(graph.get_reachable('Five'),
             set(['Five', 'Six']))
+
+        self.assertEqual(graph.get_routes('One', 'Two'),
+            set([('One', 'Two'), ('One', 'Three', 'Two')]))
+        self.assertEqual(graph.get_routes('One', 'Four'),
+            set([('One', 'Four')]))
+        self.assertEqual(graph.get_routes('Two', 'Four'),
+            set([('Two', 'One', 'Four'), ('Two', 'Three', 'One', 'Four')]))
+        self.assertEqual(graph.get_routes('Five', 'Six'),
+            set([('Five', 'Six')]))
