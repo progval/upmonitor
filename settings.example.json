@@ -3,8 +3,8 @@
         "bofh@example.org"
     ],
     "log": {
-        "level": "INFO",
-        "format": "%(asctime)s %(levelname)s: %(message)s"
+        "level": "DEBUG",
+        "format": "%(asctime)s %(levelname)8s %(name)s: %(message)s"
     },
     "interval": 10,
     "secret": "random passphrase",
@@ -13,6 +13,15 @@
         },
         "upmonitor/plugins/mail_notification.py": {
             "dry_run": true
+        },
+        "upmonitor/plugins/latency.py": {
+            "interval": 10,
+            "alert_threshold": 0,
+            "targets": ["Desktop_One", "Desktop_Two", "Server"]
+        },
+        "upmonitor/plugins/smtp.py": {
+            "targets": ["Desktop_One", "Desktop_Two", "Server"],
+            "interval": 10
         }
     },
     "hosts": {

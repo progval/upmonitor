@@ -70,12 +70,17 @@ class Plugin:
         from upmonitor import handlers
         handlers.Handler.request_ping(self.name, *args, **kwargs)
     @classmethod
-    def dispatch_pong_notification(cls, plugin, pinged_by, target, latency,
-            extra):
+    def dispatch_ping_request(cls, plugin, target, data, callback):
+        assert plugin in cls._instances
+        assert hasattr(cls._instances[plugin], 'on_ping_request'), plugin
+        cls._instances[plugin].on_ping_request(target, data, callback)
+    @classmethod
+    def dispatch_pong_notification(cls, plugin, pinged_by, target,
+            status, latency, extra):
         assert plugin in cls._instances
         assert hasattr(cls._instances[plugin], 'on_pong_notification'), plugin
-        cls._instances[plugin].on_pong_notification(pinged_by, target, latency,
-                extra)
+        cls._instances[plugin].on_pong_notification(pinged_by, target,
+                status, latency, extra)
 
 
     def post_update_state(self, old_state, new_state,

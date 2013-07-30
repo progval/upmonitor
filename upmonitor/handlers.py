@@ -446,8 +446,6 @@ class Handler(networking.Handler):
             it will not be sent over network.
         :param direct_ping: Determines whether or not this host will
             make a ping too."""
-        if not standard_ping:
-            raise NotImplementedError()
         assert not standard_ping or data is None
         id = uid()
         key = (cls._my_hostname, id)
@@ -470,9 +468,14 @@ class Handler(networking.Handler):
             if standard_ping:
                 key = (cls._my_hostname, id)
                 plugins.Plugin.dispatch_pong_notification(plugin,
-                        cls._my_hostname, cls._my_hostname, 0, extra)
+                        cls._my_hostname, cls._my_hostname, None, 0, extra)
             else:
-                raise NotImplementedError()
+                def callback(status, latency):
+                    plugins.Plugin.dispatch_pong_notification(plugin,
+                            cls._my_hostname, cls._my_hostname,
+                            status, latency, extra)
+                plugins.Plugin.dispatch_ping_request(plugin, target, data,
+                        callback)
 
     @check_auth
     def on_request_ping(self, creator, id, target, plugin, data=None):
@@ -498,9 +501,18 @@ class Handler(networking.Handler):
                         creator=creator,
                         id=id,
                         pinged_by=self._my_hostname,
+                        status=None,
                         latency=0)
             else:
-                raise NotImplementedError()
+                def callback(status, latency):
+                    self.call.pong_notification(
+                            creator=creator,
+                            id=id,
+                            pinged_by=self._my_hostname,
+                            status=status,
+                            latency=latency)
+                plugins.Plugin.dispatch_ping_request(plugin, target, data,
+                        callback)
         elif target == self._other_hostname:
             self.make_ping(creator, id, plugin, data)
         else:
@@ -552,16 +564,18 @@ class Handler(networking.Handler):
                             creator=creator,
                             id=id,
                             pinged_by=self._my_hostname,
+                            status=None,
                             latency=latency)
 
     @check_auth
-    def on_pong_notification(self, creator, id, pinged_by, latency):
+    def on_pong_notification(self, creator, id, pinged_by, status, latency):
         """Called when another host received a pong. Handle it if we are the
         author of the ping; relay it if we are not.
         
         :param creator: The creator of the ping request
         :param id: Ping id.
         :param pinged_by: The host which sent the ping (and received the pong)
+        :param status: Status of the request, if applicable.
         :param latency: The delta between the moment the ping was sent
             and the moment the pong was received."""
         key = (creator, id)
@@ -571,7 +585,7 @@ class Handler(networking.Handler):
             return
         self._pongs[key] |= {pinged_by}
         if creator == self._my_hostname:
-            self.handle_pong(id, pinged_by, latency)
+            self.handle_pong(id, pinged_by, status, latency)
         else:
             for handler in self._instances.values():
                 if handler._authenticated:
@@ -579,9 +593,10 @@ class Handler(networking.Handler):
                             creator=creator,
                             id=id,
                             pinged_by=pinged_by,
+                            status=status,
                             latency=latency)
 
-    def handle_pong(self, id, pinged_by, latency):
+    def handle_pong(self, id, pinged_by, status, latency):
         """Called after any pong or pong_notification in reply of one of
         the ping requests we made."""
         key = (self._my_hostname, id)
@@ -589,7 +604,7 @@ class Handler(networking.Handler):
         (target, plugin, local_timestamp, extra) = self._pings[key]
         assert plugin is not None
         plugins.Plugin.dispatch_pong_notification(plugin, pinged_by, target,
-                latency, extra)
+                status, latency, extra)
 
 
 
