@@ -1,7 +1,7 @@
 Protocol
 ^^^^^^^^
 
-All messages are msgpack-encoding dictionnaries with a `command` entry.
+All messages are msgpack-encoded dictionnaries with a `command` entry.
 
 On connection, both peers send a `handshake` message, and each replied
 with a `validate_handshake` message; and finally a `validate_handshake_reply`
