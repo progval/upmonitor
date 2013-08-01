@@ -15,7 +15,7 @@ Hosts
 An host is a computer/process connected to the network.
 
 A node is an authenticated host with full access to the network database
-and objects. For the moment, host and node are two equivalent concepts.
+and objects.
 
 Authentication is made using a random token (created at runtime) and a
 secret token (which is never sent over network) which are concatenated

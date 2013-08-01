@@ -35,20 +35,28 @@ class PING:
     EXTRA = 3
 
 
-def check_auth(f):
+def check_auth(read_only):
     """Utility decorator to check the remote host has already been
     authenticated before calling the decorated method."""
-    def newf(self, *args, **kwargs):
-        if self._authenticated:
-            return f(self, *args, **kwargs)
-        else:
-            logging.warning(('Host %s using command %s without '
-                    'being authenticated.') %
-                    (self._other_hostname or '<unknown>',
-                     f.__name__[3:]))
-    newf.__doc__ = f.__doc__
-    newf.__repr__ = f.__repr__
-    return newf
+    def decorator(f):
+        def newf(self, *args, **kwargs):
+            if self._authenticated:
+                if read_only or not self._read_only:
+                    return f(self, *args, **kwargs)
+                else:
+                    logging.warning(('Host %s using command %s without '
+                            'write access.') %
+                            (self._other_hostname or '<unknown>',
+                             f.__name__[3:]))
+            else:
+                logging.warning(('Host %s using command %s without '
+                        'being authenticated.') %
+                        (self._other_hostname or '<unknown>',
+                         f.__name__[3:]))
+        newf.__doc__ = f.__doc__
+        newf.__repr__ = f.__repr__
+        return newf
+    return decorator
 
 def host_precedence(host1, host2):
     """Returns -1 if host1 has precedence, 0 if both hosts are equal, and
@@ -90,6 +98,9 @@ class Handler(networking.Handler):
         self._database = database
         self._authenticated = False
         """Whether or not the remote host successfully signed the token."""
+        self._read_only = True
+        """Whether or not the remote host can write database, create intents,
+        or create ping requests."""
         self._token = base64.b64encode(os.urandom(64))
         """Random token used as salt for this session."""
 
@@ -101,9 +112,9 @@ class Handler(networking.Handler):
         logging.info('Sending handshake to %s.' %
                 (self._other_hostname or '<unknown>'))
         self.call.handshake(version=PROTOCOL_VERSION, token=self._token,
-                hostname=self._my_hostname)
+                hostname=self._my_hostname, read_only=False)
 
-    def on_handshake(self, version, token, hostname):
+    def on_handshake(self, version, token, hostname, read_only):
         """Should be the first function called by any of the peers.
 
         :param version: Protocol version
@@ -117,7 +128,12 @@ class Handler(networking.Handler):
             self._other_hostname = hostname
         self._db_connection = self._database[self._my_hostname][hostname]
         logging.info('Handshake is from %s.' % hostname)
-        m = hmac.new(self._conf['secret'].encode())
+        if read_only:
+            secret = self._conf['secrets']['readonly']
+        else:
+            secret = self._conf['secrets']['readwrite']
+        self._read_only = read_only
+        m = hmac.new(secret.encode())
         m.update(token.encode())
         m.update(self._my_hostname.encode())
         self.call.validate_handshake(signed_token=m.hexdigest())
@@ -128,7 +144,7 @@ class Handler(networking.Handler):
         :param signed_token: hexadecimal digest of an hmap token created
             with the secret key + token given in 'handshake' + hostname
             of the peer signing the token."""
-        m = hmac.new(self._conf['secret'].encode())
+        m = hmac.new(self._conf['secrets']['readwrite'].encode())
         m.update(self._token)
         m.update(self._other_hostname.encode())
         if m.hexdigest() == signed_token:
@@ -169,7 +185,7 @@ class Handler(networking.Handler):
                         monitor_hostname=my_hostname,
                         slave_hostname=slave_hostname)
 
-    @check_auth
+    @check_auth(read_only=True)
     def on_request_state(self, monitor_hostname=None, slave_hostname=None):
         """Request whole or part of the database.
 
@@ -188,7 +204,7 @@ class Handler(networking.Handler):
                 slave_hostname=slave_hostname,
                 new_state=state.to_dict())
 
-    @check_auth
+    @check_auth(read_only=False)
     def on_update_state(self, new_state,
             monitor_hostname=None, slave_hostname=None):
         """Updates values whose timestamp is greater than the one
@@ -280,7 +296,7 @@ class Handler(networking.Handler):
         cls._intents[plugin].append([id, cls._my_hostname,
                 set([cls._my_hostname]), False, extra])
 
-    @check_auth
+    @check_auth(read_only=True)
     def on_request_intents(self):
         """Reply with a 'new_intents' command. Usually called on
         connection."""
@@ -290,7 +306,7 @@ class Handler(networking.Handler):
              if not performed]
             for (plugin, intents) in self._intents.items()})
 
-    @check_auth
+    @check_auth(read_only=False)
     def on_new_intents(self, intents):
         """Notify about multiple intent creation. Usually in reply
         of the 'request_intents' command.
@@ -300,7 +316,7 @@ class Handler(networking.Handler):
             for (id, creator, approvals) in plugin_intents:
                 self.on_new_intent(plugin, id, creator, approvals)
 
-    @check_auth
+    @check_auth(read_only=False)
     def on_new_intent(self, plugin, id, creator, approvals):
         """Asks us to approve an intent.
 
@@ -416,7 +432,7 @@ class Handler(networking.Handler):
                         creator=old_intent[INTENT.CREATOR],
                         approvals=old_intent[INTENT.APPROVALS])
 
-    @check_auth
+    @check_auth(read_only=False)
     def on_delete_intent(self, plugin, id):
         """Mark an intent as performed and relay it.
 
@@ -499,7 +515,7 @@ class Handler(networking.Handler):
                 plugins.Plugin.dispatch_ping_request(plugin, target, data,
                         callback)
 
-    @check_auth
+    @check_auth(read_only=False)
     def on_request_ping(self, creator, id, target, plugin, data=None):
         """Asks us to perform a ping.
 
@@ -574,7 +590,7 @@ class Handler(networking.Handler):
         :param token: A token that will be sent with the 'pong'."""
         self.call.pong(token=token)
 
-    @check_auth
+    @check_auth(read_only=False)
     def on_pong(self, token):
         """Reply to a 'ping'.
 
@@ -603,7 +619,7 @@ class Handler(networking.Handler):
                             status=None,
                             latency=latency)
 
-    @check_auth
+    @check_auth(read_only=False)
     def on_pong_notification(self, creator, id, pinged_by, status, latency):
         """Called when another host received a pong. Handle it if we are the
         author of the ping; relay it if we are not.
